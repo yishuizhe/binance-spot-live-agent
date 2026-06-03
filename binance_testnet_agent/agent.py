@@ -146,8 +146,8 @@ class TradingAgent:
             return 0.0, 0.0
         account = self.client.account()
         balances = {item["asset"]: item for item in account.get("balances", [])}
-        base = float(balances.get(self.config.base_asset, {}).get("free", 0))
-        quote = float(balances.get(self.config.quote_asset, {}).get("free", 0))
+        base = _balance_total(balances, self.config.base_asset)
+        quote = _balance_total(balances, self.config.quote_asset)
         return base, quote
 
     def _position_sizing(self, snapshot: MarketSnapshot) -> PositionSizing:
@@ -264,12 +264,14 @@ class TradingAgent:
                 rounded_qty = self.client.round_quantity(Decimal(str(decision.quantity)), filters)
                 if rounded_qty < filters.min_qty:
                     return {"skipped": True, "reason": "rounded quantity below minQty", "quantity": str(rounded_qty)}
-                if rounded_qty > Decimal(str(snapshot.base_balance)):
+                available_base = self._available_base_balance()
+                if rounded_qty > Decimal(str(available_base)):
                     return {
                         "skipped": True,
-                        "reason": "ledger quantity exceeds account base balance; sync ledger first",
+                        "reason": "ledger quantity exceeds available account base balance; sync ledger first",
                         "quantity": str(rounded_qty),
                         "base_balance": snapshot.base_balance,
+                        "available_base_balance": available_base,
                     }
                 if rounded_qty * Decimal(str(snapshot.price)) < filters.min_notional:
                     return {"skipped": True, "reason": "quantity below minNotional", "quantity": str(rounded_qty)}
@@ -285,6 +287,11 @@ class TradingAgent:
             return self.client.market_sell_qty(self.config.symbol, rounded_qty)
         except BinanceAPIError as exc:
             return {"error": str(exc), "side": decision.signal.value, "level": decision.level}
+
+    def _available_base_balance(self) -> float:
+        account = self.client.account()
+        balances = {item["asset"]: item for item in account.get("balances", [])}
+        return float(balances.get(self.config.base_asset, {}).get("free", 0) or 0)
 
     def _update_ledger(
         self,
@@ -395,3 +402,8 @@ class TradingAgent:
             return int(level.split("-", 1)[1])
         except (IndexError, ValueError):
             return 0
+
+
+def _balance_total(balances: dict[str, dict[str, Any]], asset: str) -> float:
+    item = balances.get(asset, {})
+    return float(item.get("free", 0) or 0) + float(item.get("locked", 0) or 0)

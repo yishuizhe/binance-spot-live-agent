@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.1 - 2026-06-03
+
+- Added built-in SVG favicon for the dashboard.
+- Improved mobile dashboard layout with tighter cards, smaller chart height, horizontal table scrolling, and touch-friendly controls.
+- Cached dashboard login validation per browser session so refreshes no longer call `/api/login` every cycle.
+- Included locked Binance balances in portfolio valuation, fixing undercounting while limit sell orders are open.
+- Kept live sell protection based on available base balance only, so locked assets cannot be sold twice.
+- Added clear educational-use and self-responsibility risk disclaimers to the README.
+- Added contribution thanks to [R0A1NG](https://github.com/R0A1NG).
+
 ## v0.2.0 - 2026-06-03
 
 - Added Binance Spot live trading support with dry-run and dashboard trading toggle.

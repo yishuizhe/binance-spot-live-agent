@@ -23,12 +23,37 @@ from .strategy import GridStrategy, MarketSnapshot
 from .swing import SwingStrategy, is_swing_lot, split_lots
 
 
+FAVICON_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="10" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f172a"/>
+      <stop offset=".58" stop-color="#123242"/>
+      <stop offset="1" stop-color="#065f46"/>
+    </linearGradient>
+    <linearGradient id="coin" x1="18" y1="12" x2="49" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#facc15"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <circle cx="32" cy="32" r="21" fill="none" stroke="url(#coin)" stroke-width="4"/>
+  <path d="M18 42 27 34l7 5 13-17" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M47 22v12h-12" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="20" y="23" width="5" height="18" rx="2.5" fill="#f8fafc"/>
+  <rect x="31" y="17" width="5" height="28" rx="2.5" fill="#f8fafc"/>
+  <rect x="42" y="28" width="5" height="17" rx="2.5" fill="#f8fafc"/>
+</svg>
+"""
+
+
 HTML = """<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Binance Spot Live Agent</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="shortcut icon" href="/favicon.svg">
   <style>
     :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
@@ -101,7 +126,32 @@ HTML = """<!doctype html>
     .inline-controls .field input, .inline-controls .field select { height: 36px; }
     .result-note { margin-top: 12px; padding: 12px; border-radius: 8px; background: #eef8f4; color: #065f46; font-weight: 750; }
     @media (max-width: 980px) { .top-board { grid-template-columns: 1fr; } .split { grid-template-columns: 1fr; } .inline-controls { grid-template-columns: 1fr 1fr; } header { display: block; } .hero-price { font-size: 38px; } }
-    @media (max-width: 560px) { main { padding: 18px; } .value { font-size: 22px; } .form-grid, .inline-controls { grid-template-columns: 1fr; } .hero-price { font-size: 32px; } }
+    @media (max-width: 560px) {
+      main { padding: 14px; }
+      header { margin-bottom: 12px; }
+      h1 { font-size: 25px; line-height: 1.08; }
+      .header-actions { justify-content: flex-start; margin-top: 12px; }
+      .panel { padding: 14px; }
+      .metric-card { min-height: auto; }
+      .hero-symbol { font-size: 15px; margin-bottom: 8px; }
+      .hero-price { font-size: 34px; margin-bottom: 12px; }
+      .value { font-size: 21px; }
+      .capital-value { font-size: 25px; }
+      .pnl-card .value { font-size: 22px; }
+      .form-grid, .inline-controls { grid-template-columns: 1fr; }
+      .chart-wrap { height: 330px; }
+      .chart-head { display: block; padding: 12px 12px 0; }
+      .range-tabs { width: 100%; margin-top: 10px; overflow-x: auto; }
+      .range-tabs button { flex: 1 0 auto; padding: 0 10px; }
+      th, td { padding: 10px 8px; font-size: 13px; white-space: nowrap; }
+      .account-table th, .account-table td { white-space: normal; }
+      .account-table th { width: 118px; }
+      .secondary-button, .action-button { min-height: 40px; }
+      .modal { padding: 12px; align-items: flex-start; }
+      .modal-panel { max-height: calc(100vh - 24px); padding: 14px; }
+      .modal-actions { flex-direction: column-reverse; }
+      .modal-actions button { width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -312,6 +362,7 @@ HTML = """<!doctype html>
     let closedPage = 0;
     let settingsLoaded = false;
     let dashboardPassword = sessionStorage.getItem('dashboardPassword') || '';
+    let loginValidated = false;
     const tradePageSize = 10;
     const closedPageSize = 8;
     const canvas = document.getElementById('chart');
@@ -326,6 +377,10 @@ HTML = """<!doctype html>
     async function apiGet(path, payload, tradingPassword) {
       const res = await fetch(path, { method: 'GET', cache: 'no-store', headers: authHeaders(tradingPassword, payload) });
       const data = await res.json();
+      if (res.status === 403) {
+        loginValidated = false;
+        document.getElementById('loginModal').classList.add('open');
+      }
       if (data.error) throw new Error(data.error);
       return data;
     }
@@ -334,8 +389,13 @@ HTML = """<!doctype html>
         document.getElementById('loginModal').classList.add('open');
         return false;
       }
+      if (loginValidated) {
+        document.getElementById('loginModal').classList.remove('open');
+        return true;
+      }
       try {
         await apiGet('/api/login');
+        loginValidated = true;
         document.getElementById('loginModal').classList.remove('open');
         return true;
       } catch (err) {
@@ -593,8 +653,10 @@ HTML = """<!doctype html>
         const pnl = document.getElementById('pnl');
         pnl.textContent = fmt(data.pnl_quote, 6) + ' ' + data.quote_asset + ' / ' + fmt(data.pnl_pct, 4) + '%';
         pnl.className = 'value ' + (data.pnl_quote >= 0 ? 'profit' : 'loss');
-        document.getElementById('base').textContent = fmt(data.base_balance, 8) + ' ' + data.base_asset;
-        document.getElementById('quote').textContent = fmt(data.quote_balance, 8) + ' ' + data.quote_asset;
+        const baseLocked = Number(data.base_locked_balance || 0);
+        const quoteLocked = Number(data.quote_locked_balance || 0);
+        document.getElementById('base').textContent = fmt(data.base_balance, 8) + ' ' + data.base_asset + (baseLocked > 0 ? `（锁定 ${fmt(baseLocked, 8)}）` : '');
+        document.getElementById('quote').textContent = fmt(data.quote_balance, 8) + ' ' + data.quote_asset + (quoteLocked > 0 ? `（锁定 ${fmt(quoteLocked, 8)}）` : '');
             const ledgerSync = data.ledger_sync || {};
             const ledgerSyncText = ledgerSync.mismatch
               ? `需同步：账本 ${fmt(ledgerSync.tracked_base_quantity || 0, 8)} / 账户 ${fmt(ledgerSync.account_base_balance || 0, 8)} ${data.base_asset}`
@@ -632,6 +694,7 @@ HTML = """<!doctype html>
       dashboardPassword = document.getElementById('loginPassword').value;
       if (!dashboardPassword) return;
       sessionStorage.setItem('dashboardPassword', dashboardPassword);
+      loginValidated = false;
       if (await requireLogin()) refresh();
     });
     document.getElementById('loginPassword').addEventListener('keydown', event => {
@@ -639,7 +702,7 @@ HTML = """<!doctype html>
     });
     refresh();
     setInterval(refresh, 5000);
-    window.addEventListener('resize', refresh);
+    window.addEventListener('resize', () => drawChart(chartPoints, chartReference));
     canvas.addEventListener('wheel', event => {
       event.preventDefault();
       const box = canvas.getBoundingClientRect();
@@ -855,8 +918,8 @@ class Dashboard:
         reference_klines = self.client.klines(self.config.symbol, interval="1m", limit=60) if interval != "1m" else klines
         account = self.client.account()
         balances = {item["asset"]: item for item in account.get("balances", [])}
-        base_balance = float(balances.get(self.config.base_asset, {}).get("free", 0))
-        quote_balance = float(balances.get(self.config.quote_asset, {}).get("free", 0))
+        base_free, base_locked, base_balance = _balance_parts(balances, self.config.base_asset)
+        quote_free, quote_locked, quote_balance = _balance_parts(balances, self.config.quote_asset)
         snapshot = MarketSnapshot(
             symbol=self.config.symbol,
             price=price,
@@ -911,6 +974,10 @@ class Dashboard:
             "trades": self.trades(),
             "open_lots": open_lots,
             "pending_orders": pending_orders,
+            "base_free_balance": base_free,
+            "base_locked_balance": base_locked,
+            "quote_free_balance": quote_free,
+            "quote_locked_balance": quote_locked,
             "ledger_sync": self.ledger_sync(base_balance, open_lots),
             "closed_lots": self.closed_lots(),
             "realized_pnl": self.ledger.realized_pnl(self.config.trading_fee_rate),
@@ -1069,8 +1136,8 @@ class Dashboard:
         price = self.client.ticker_price(self.config.symbol)
         account = self.client.account()
         balances = {item["asset"]: item for item in account.get("balances", [])}
-        base_balance = float(balances.get(self.config.base_asset, {}).get("free", 0))
-        quote_balance = float(balances.get(self.config.quote_asset, {}).get("free", 0))
+        _, _, base_balance = _balance_parts(balances, self.config.base_asset)
+        _, _, quote_balance = _balance_parts(balances, self.config.quote_asset)
         return reset_baseline(
             self.baseline_path,
             symbol=self.config.symbol,
@@ -1154,8 +1221,8 @@ class Dashboard:
         price = self.client.ticker_price(self.config.symbol)
         account = self.client.account()
         balances = {item["asset"]: item for item in account.get("balances", [])}
-        base_balance = float(balances.get(self.config.base_asset, {}).get("free", 0))
-        quote_balance = float(balances.get(self.config.quote_asset, {}).get("free", 0))
+        _, _, base_balance = _balance_parts(balances, self.config.base_asset)
+        _, _, quote_balance = _balance_parts(balances, self.config.quote_asset)
         return quote_balance + base_balance * price
 
     def _backtest_config(self, initial_quote: float, initial_price: float, minutes: int, take_profit_pct: float) -> BacktestConfig:
@@ -1621,6 +1688,13 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _balance_parts(balances: dict[str, dict[str, Any]], asset: str) -> tuple[float, float, float]:
+    item = balances.get(asset, {})
+    free = float(item.get("free", 0) or 0)
+    locked = float(item.get("locked", 0) or 0)
+    return free, locked, free + locked
+
+
 def make_handler(dashboard: Dashboard) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
@@ -1628,6 +1702,9 @@ def make_handler(dashboard: Dashboard) -> type[BaseHTTPRequestHandler]:
             path = parsed.path
             if path == "/" or path == "/index.html":
                 self._send(200, HTML.encode(), "text/html; charset=utf-8")
+                return
+            if path == "/favicon.svg":
+                self._send(200, FAVICON_SVG, "image/svg+xml")
                 return
             if not self._authorized():
                 self._send(403, json.dumps({"error": "not logged in"}).encode(), "application/json")
