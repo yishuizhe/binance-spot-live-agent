@@ -6,6 +6,7 @@ import hmac
 import json
 import os
 from dataclasses import asdict
+from datetime import datetime
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -693,7 +694,9 @@ HTML = """<!doctype html>
       });
       applyMobileLabels(tbody, ['场景', '盈利比例', '总资产', '收益率', '已实现', '未实现', '手续费', '买/卖', '未平', '最大回撤']);
       const advice = document.getElementById('backtestAdvice');
-      advice.textContent = data.recommendation && data.recommendation.text ? data.recommendation.text : '';
+      const intervalNote = data.interval ? `本次真实 K 线回测使用 ${data.interval} 粒度。` : '';
+      const adviceText = data.recommendation && data.recommendation.text ? data.recommendation.text : '';
+      advice.textContent = [intervalNote, adviceText].filter(Boolean).join(' ');
       advice.style.display = advice.textContent ? 'block' : 'none';
     }
     async function refresh() {
@@ -1217,17 +1220,19 @@ class Dashboard:
             end = str(payload.get("end", "") or "").strip()
             if not start or not end:
                 return {"error": "historical backtest requires start and end dates"}
-            prices = fetch_close_prices(self.config.base_url, self.config.symbol, "1m", _date_ms(start), _date_ms(end))
+            interval = _historical_backtest_interval(start, end)
+            prices = fetch_close_prices(self.config.base_url, self.config.symbol, interval, _date_ms(start), _date_ms(end))
             if len(prices) < 120:
                 return {"error": f"not enough kline data: {len(prices)}"}
             for profit in take_profits:
                 result = run_backtest(
-                    f"{start}..{end}",
+                    f"{start}..{end} {interval}",
                     prices,
                     self._backtest_config(initial_quote, prices[0], len(prices), profit),
                 )
                 item = asdict(result)
                 item["take_profit_pct"] = profit
+                item["interval"] = interval
                 results.append(item)
         else:
             days = max(1, min(90, int(float(payload.get("days", 30) or 30))))
@@ -1243,6 +1248,7 @@ class Dashboard:
             "initial_quote": initial_quote,
             "take_profits": take_profits,
             "results": results,
+            "interval": results[0].get("interval") if results else None,
             "recommendation": _backtest_recommendation(results, mode),
         }
 
@@ -1716,6 +1722,17 @@ def _parse_profit_value(value: Any) -> float:
 def _parse_profit_list(value: str) -> list[float]:
     profits = [_parse_profit_value(item.strip()) for item in value.split(",") if item.strip()]
     return [item for item in profits if item > 0] or [0.006, 0.01, 0.012]
+
+
+def _historical_backtest_interval(start: str, end: str) -> str:
+    start_dt = datetime.fromisoformat(start)
+    end_dt = datetime.fromisoformat(end)
+    days = max(1, (end_dt - start_dt).days)
+    if days <= 7:
+        return "1m"
+    if days <= 31:
+        return "5m"
+    return "15m"
 
 
 def _backtest_recommendation(results: list[dict[str, Any]], mode: str) -> dict[str, Any]:
