@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.5 - 2026-06-04
+
+- Fixed month-scale historical dashboard backtests timing out through Nginx by automatically selecting `1m`, `5m`, or `15m` klines based on date range.
+- Added the selected historical kline interval to the dashboard backtest advice.
+- Increased the deployed Nginx reverse proxy timeout for the dashboard from 60s to 180s as a fallback.
+
 ## v0.2.4 - 2026-06-04
 
 - Fixed dashboard backtest handling when an upstream or proxy returns HTML instead of JSON; the UI now reports a readable non-JSON response error instead of `Unexpected token '<'`.

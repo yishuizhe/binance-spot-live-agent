@@ -1,6 +1,6 @@
 import unittest
 
-from binance_testnet_agent.dashboard import _order_quote_qty
+from binance_testnet_agent.dashboard import _historical_backtest_interval, _order_quote_qty
 
 
 class DashboardOrderTest(unittest.TestCase):
@@ -22,6 +22,11 @@ class DashboardOrderTest(unittest.TestCase):
         }
 
         self.assertAlmostEqual(_order_quote_qty(order, fallback_price=65000), 64.5)
+
+    def test_historical_backtest_interval_scales_with_date_range(self) -> None:
+        self.assertEqual(_historical_backtest_interval("2026-04-01", "2026-04-07"), "1m")
+        self.assertEqual(_historical_backtest_interval("2026-04-01", "2026-05-01"), "5m")
+        self.assertEqual(_historical_backtest_interval("2026-04-01", "2026-06-01"), "15m")
 
 
 if __name__ == "__main__":
