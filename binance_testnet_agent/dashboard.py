@@ -630,7 +630,11 @@ HTML = """<!doctype html>
       <div class="field"><label>页面密码</label><input id="loginPassword" type="password" autocomplete="current-password"></div>
       <label style="display:flex;align-items:flex-start;gap:8px;margin-top:12px;cursor:pointer;color:var(--text);font-size:13px;line-height:1.45">
         <input type="checkbox" id="loginRemember" style="width:auto;margin-top:2px;accent-color:var(--accent)">
-        <span>记住我，24 小时内免登录<br><span class="muted">密码会保存在当前浏览器中，仅建议在私人设备使用。</span></span>
+        <span>临时设备记住 24 小时<br><span class="muted">适合临时使用的电脑或手机，到期后需要重新登录。</span></span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:8px;margin-top:12px;cursor:pointer;color:var(--text);font-size:13px;line-height:1.45">
+        <input type="checkbox" id="loginTrust" style="width:auto;margin-top:2px;accent-color:var(--accent)">
+        <span>信任此设备，长期免密<br><span class="muted">仅用于自己的设备；页面密码失效或主动取消信任后会重新登录。</span></span>
       </label>
       <div class="muted" id="loginStatus" style="margin-top:12px">请输入页面密码后查看实盘看板。</div>
       <div class="modal-actions"><button class="action-button" id="loginButton">登录</button></div>
@@ -668,6 +672,7 @@ HTML = """<!doctype html>
         <button class="theme-chip" data-theme-choice="mono">极简</button>
       </div>
       <button class="secondary-button theme-toggle" id="mascotToggle">隐藏看板助手</button>
+      <button class="secondary-button theme-toggle" id="forgetDevice">取消信任并退出</button>
     </div>
     <div class="dock-rail">
       <button class="dock-fab" id="themeFab" title="主题" aria-label="主题" data-help="打开主题选择和看板助手显示设置。"><span class="theme-icon" aria-hidden="true"></span></button>
@@ -711,19 +716,24 @@ HTML = """<!doctype html>
       if (cached) {
         try {
           const data = JSON.parse(cached);
+          if (data.password && data.mode === 'trusted') {
+            return { password: data.password, mode: 'trusted' };
+          }
           if (data.password && Number(data.expiry) > Date.now()) {
-            return { password: data.password, remembered: true };
+            return { password: data.password, mode: 'temporary' };
           }
         } catch (err) {}
         localStorage.removeItem(loginCacheKey);
       }
-      return { password: sessionStorage.getItem('dashboardPassword') || '', remembered: false };
+      return { password: sessionStorage.getItem('dashboardPassword') || '', mode: 'session' };
     }
     function clearRememberedLogin() {
       localStorage.removeItem(loginCacheKey);
       sessionStorage.removeItem('dashboardPassword');
       const remember = document.getElementById('loginRemember');
       if (remember) remember.checked = false;
+      const trust = document.getElementById('loginTrust');
+      if (trust) trust.checked = false;
     }
     const cachedLogin = readCachedLogin();
     let dashboardPassword = cachedLogin.password;
@@ -737,7 +747,8 @@ HTML = """<!doctype html>
     const canvas = document.getElementById('chart');
     const ctx = canvas.getContext('2d');
     const chartTip = document.getElementById('chartTip');
-    document.getElementById('loginRemember').checked = cachedLogin.remembered;
+    document.getElementById('loginRemember').checked = cachedLogin.mode === 'temporary';
+    document.getElementById('loginTrust').checked = cachedLogin.mode === 'trusted';
     if (cachedLogin.password) document.getElementById('loginModal').classList.remove('open');
     function authHeaders(tradingPassword, payload) {
       const headers = { 'X-Dashboard-Password': dashboardPassword };
@@ -1388,12 +1399,19 @@ HTML = """<!doctype html>
       dashboardPassword = document.getElementById('loginPassword').value;
       if (!dashboardPassword) return;
       const rememberLogin = document.getElementById('loginRemember').checked;
+      const trustDevice = document.getElementById('loginTrust').checked;
       loginValidated = false;
       if (await requireLogin()) {
         sessionStorage.setItem('dashboardPassword', dashboardPassword);
-        if (rememberLogin) {
+        if (trustDevice) {
           localStorage.setItem(loginCacheKey, JSON.stringify({
             password: dashboardPassword,
+            mode: 'trusted'
+          }));
+        } else if (rememberLogin) {
+          localStorage.setItem(loginCacheKey, JSON.stringify({
+            password: dashboardPassword,
+            mode: 'temporary',
             expiry: Date.now() + 24 * 60 * 60 * 1000
           }));
         } else {
@@ -1405,6 +1423,12 @@ HTML = """<!doctype html>
     });
     document.getElementById('loginPassword').addEventListener('keydown', event => {
       if (event.key === 'Enter') document.getElementById('loginButton').click();
+    });
+    document.getElementById('loginRemember').addEventListener('change', event => {
+      if (event.target.checked) document.getElementById('loginTrust').checked = false;
+    });
+    document.getElementById('loginTrust').addEventListener('change', event => {
+      if (event.target.checked) document.getElementById('loginRemember').checked = false;
     });
     refresh();
     loadComments();
@@ -1840,6 +1864,17 @@ HTML = """<!doctype html>
     document.getElementById('mascotToggle').addEventListener('click', () => {
       const hidden = document.getElementById('mascot').classList.contains('hidden');
       setMascotVisible(hidden);
+    });
+    document.getElementById('forgetDevice').addEventListener('click', async () => {
+      const confirmed = await uiConfirm('确认取消当前设备的信任并退出看板？下次进入需要重新输入页面密码。', '取消信任设备');
+      if (!confirmed) return;
+      clearRememberedLogin();
+      dashboardPassword = '';
+      loginValidated = false;
+      document.getElementById('loginPassword').value = '';
+      document.getElementById('loginStatus').textContent = '当前设备信任已取消，请重新输入页面密码。';
+      document.getElementById('loginModal').classList.add('open');
+      document.getElementById('themeDock').classList.remove('open');
     });
     const mascotImage = document.getElementById('mascotImage');
     let mascotRetries = 0;
