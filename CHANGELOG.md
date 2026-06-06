@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.12 - 2026-06-06
+
+- Added a trusted-device login mode that remains signed in until credentials fail or the user explicitly revokes trust.
+- Clarified the existing 24-hour option as temporary-device login and made it mutually exclusive with trusted-device mode.
+- Added a revoke-trust-and-sign-out action to the theme drawer.
+- Renamed the GitHub repository to `yishuizhe/spotflow`.
+
 ## v1.0.11 - 2026-06-06
 
 - Renamed the browser title to `SpotFlow · 现货量化助手` and set the iOS home-screen name to `SpotFlow`.
