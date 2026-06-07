@@ -1665,7 +1665,7 @@ HTML = """<!doctype html>
       await refresh();
       const summary = `一键限价卖完成：成功 ${success} 个，跳过 ${skipped} 个，失败 ${failures.length} 个。`;
       if (failures.length) {
-        await uiAlert(`${summary}\n\n${failures.slice(0, 3).join('\n')}`, '挂单结果');
+        await uiAlert(`${summary}\\n\\n${failures.slice(0, 3).join('\\n')}`, '挂单结果');
       } else {
         showNotice(summary);
       }
