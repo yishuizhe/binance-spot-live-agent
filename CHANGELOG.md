@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.18 - 2026-06-08
+
+- Fixed a JavaScript syntax error caused by `\n` inside a Python triple-quoted string being rendered as a literal newline inside a JS single-quoted string, which silently broke all JavaScript execution on the dashboard page.
+- Added an `onclick` fallback for the login button and a JS-loaded indicator in the login status text.
+- Fixed the defensive scalp strategy ignoring the `auto_sell` flag: batches manually set to "取消自动卖" were still being sold when the scalp target price was reached.
+
 ## v1.0.17 - 2026-06-07
 
 - Added a final sell gate in the auto-trading agent that blocks any automated sell whose execution price is below the lot's true cost basis plus bilateral fees, preventing loss-making exits from lots with stale target prices.
